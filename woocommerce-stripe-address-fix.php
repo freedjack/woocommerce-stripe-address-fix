@@ -58,14 +58,12 @@ class Custom_Stripe_Fixes {
         add_action( 'woocommerce_checkout_process', array( $this, 'debug_checkout_process' ) );
         add_action( 'woocommerce_checkout_order_processed', array( $this, 'debug_order_processed' ), 10, 3 );
         
-        error_log( 'Custom_Stripe_Fixes: Filters added successfully' );
     }
     
     /**
      * Fix missing address fields from POST data
      */
     public function fix_address_fields( $args ) {
-        error_log( 'Custom_Stripe_Fixes: fix_address_fields called' );
         
         // Address field mapping from WooCommerce to Stripe
         $address_field_mapping = [
@@ -111,9 +109,111 @@ class Custom_Stripe_Fixes {
             }
         }
         
+        $civi_id = $this->get_civicrm_contact_id_from_wc_customer_id($args['customer']);
+
+        $this->update_contact_address(
+            $civi_id, 
+            $args['address']['line1'], 
+            $args['address']['city'], 
+            $args['address']['state'], 
+            $args['address']['postal_code'], 
+            $args['address']['country']
+        );
+
         return $args;
     }
     
+
+
+    function get_civicrm_contact_id_from_wc_customer_id($user_id) {
+      // echo 'Getting civi id forUser ID: ' . $user_id . '<br>';
+         
+      $user_data = get_userdata($user_id);
+      $email = $user_data->user_email;
+  
+      $civi_id = $this->get_civi_id_from_email($email);
+      if ($civi_id) {
+          return $civi_id;
+      }
+  
+      return null;
+      }
+
+      public function get_civi_id_from_email($email) {
+    
+        if (!$email) {
+            // echo 'User email not found for user ID: ';
+            return null;
+        }
+        $result = civicrm_api3('Contact', 'get', [
+            'sequential' => 1,
+            'return' => ['id'],
+            'email' => $email,
+        ]);
+        if ($result['count'] > 0) {
+            // CiviCRM contact found
+          return $result['values'][0]['id'];
+        }
+        return null;
+    }
+
+    public function update_contact_address(
+      $contact_id, 
+      $street_address, 
+      $city, 
+      $state_province_id, 
+      $postal_code, 
+      $country_id
+    ) {
+      // Check for existing address
+
+      $address_check = $this->find_address_by_contact_id($contact_id);
+
+      // Initialize appropriate action based on existing address
+      if ($address_check->count() > 0) {
+          $address_result = \Civi\Api4\Address::update(FALSE);
+          $address_result->addWhere('id', '=', $address_check[0]['id']);
+      } else {
+          $address_result = \Civi\Api4\Address::create(FALSE);
+          $address_result->addValue('contact_id', $contact_id);
+      }
+
+      // Add address field updates if provided
+      if ($street_address) {
+          $address_result->addValue('street_address', $street_address);
+      }
+      if ($city) {
+          $address_result->addValue('city', $city);
+      }
+      if ($state_province_id) {
+          $address_result->addValue('state_province_id', $state_province_id);
+      }
+      if ($postal_code) {
+          $address_result->addValue('postal_code', $postal_code);
+      }
+      if ($country_id) {
+          $address_result->addValue('country_id', $country_id);
+      }
+      
+      return $address_result->execute();
+    }
+
+    /**
+     * Find address record by contact ID
+     * 
+     * Utility method to retrieve address record for a given contact.
+     *
+     * @param int $contact_id CiviCRM contact ID
+     * @return array|null Array containing address ID if found, null otherwise
+     */
+    private function find_address_by_contact_id($contact_id) {
+      $address_result = \Civi\Api4\Address::get(FALSE)
+          ->addSelect('id')
+          ->addWhere('contact_id', '=', $contact_id)
+          ->execute();
+      return $address_result;
+    }
+
     /**
      * Test: Check if filter is being called
      */
