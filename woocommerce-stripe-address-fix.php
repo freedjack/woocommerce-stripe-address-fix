@@ -18,9 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Custom_Stripe_Fixes {
     
     public function __construct() {
-        // Debug: Log when plugin is loaded
-        error_log( 'Custom_Stripe_Fixes: Plugin loaded' );
-        
+
         // Hook into plugins_loaded to ensure dependencies are available
         add_action( 'plugins_loaded', array( $this, 'init' ), 20 );
         
@@ -39,8 +37,6 @@ class Custom_Stripe_Fixes {
             error_log( 'Custom_Stripe_Fixes: Stripe not active' );
             return;
         }
-        
-        error_log( 'Custom_Stripe_Fixes: Initializing filters' );
         
         // Hook into Stripe customer creation
         add_filter( 'wc_stripe_create_customer_args', array( $this, 'fix_address_fields' ), 10, 1 );
@@ -305,6 +301,3 @@ class Custom_Stripe_Fixes {
 
 // Initialize the plugin
 new Custom_Stripe_Fixes();
-
-// Debug: Check if plugin file is being loaded
-error_log( 'Custom_Stripe_Fixes: Plugin file loaded at ' . __FILE__ );
